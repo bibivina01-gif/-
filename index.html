@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>서사 타임라인 보드</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+:root{
+  --page-bg:#f1edf1;
+  --board-bg:#fffdfd;
+  --board-border:#ece2ea;
+  --board-image:none;
+  --page-image:none;
+
+  --text:#29232a;
+  --accent:#9b8397;
+  --muted:#7e737f;
+
+  --timeline:#ebe2e9;
+  --photo-bg:#eae3ea;
+
+  --panel-bg:#fffdfd;
+  --panel-border:#eadfe7;
+
+  --year-bg:#f0e8ee;
+  --year-text:#9b8397;
+
+  --tag-bg:rgba(255,255,255,1);
+  --tag-text:#806d7c;
+  --tag-border:#dbced8;
+
+  --marker-bg:#2f2a31;
+  --marker-text:#fff;
+
+  --footer-bg:rgba(250,247,249,.82);
+  --footer-border:#ece2ea;
+  --footer-card-bg:#fff;
+  --footer-card-border:#ece2ea;
+
+  --scan-opacity:0;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  background:var(--page-bg);
+  color:var(--text);
+}
+.page-bg{
+  position:fixed; inset:0; z-index:-3;
+  background-color:var(--page-bg);
+  background-image:var(--page-image);
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+.toolbar{
+  position:sticky; top:0; z-index:10000;
+  padding:10px;
+  background:rgba(249,246,249,.9);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid #e7dde5;
+}
+.toolbar-inner{
+  width:min(1500px,98vw);
+  margin:0 auto;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.group{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  align-items:center;
+  padding:7px 9px;
+  border-radius:16px;
+  background:rgba(255,255,255,.8);
+  border:1px solid #e9dde6;
+}
+.group-title{font-size:11px;font-weight:900;color:#806e7e;letter-spacing:.1em}
+.ctl{display:flex;align-items:center;gap:5px;font-size:12px;color:#5e545e}
+.ctl input[type=color]{width:30px;height:30px;border:0;padding:0;background:none}
+.ctl input[type=range]{width:90px}
+button,label.file-btn{
+  border:0;
+  border-radius:999px;
+  padding:9px 13px;
+  background:#302930;
+  color:#fff;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+button.soft,label.file-btn.soft{background:#958192}
+button.light{background:#fff;color:#625762;border:1px solid #e5dce3}
+input[type=file]{display:none}
+.orientation.active{background:#302930!important;color:#fff!important}
+
+.export-frame{
+  position:relative;
+  width:1352px;
+  padding:96px;
+  margin:0 auto;
+  background-color:var(--page-bg);
+  background-image:var(--page-image);
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+.export-guide{
+  position:absolute; inset:2px; z-index:1000;
+  pointer-events:none;
+  border:2px dashed rgba(145,120,142,.58);
+  border-radius:18px;
+}
+.export-guide::after{
+  content:"PNG 저장 영역";
+  position:absolute;
+  left:12px; top:12px;
+  padding:5px 9px;
+  border-radius:999px;
+  background:rgba(40,34,41,.82);
+  color:#fff;
+  font-size:11px;font-weight:900;
+}
+.board{
+  position:relative;
+  width:1160px;
+  margin:0 auto;
+  border:1px solid var(--board-border);
+  border-radius:34px;
+  overflow:hidden;
+  box-shadow:0 18px 55px rgba(52,37,51,.1);
+  isolation:isolate;
+}
+.board-bg{
+  position:absolute; inset:0; z-index:0;
+  background-color:var(--board-bg);
+  background-image:var(--board-image);
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+.board-wash{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.1))}
+.board > section,.board > .add-area{position:relative;z-index:3}
+.scanlines{
+  position:absolute;inset:0;z-index:20;pointer-events:none;
+  opacity:var(--scan-opacity);
+  background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.07) 3px,rgba(255,255,255,.01) 4px);
+  mix-blend-mode:multiply;
+}
+.stickers{position:absolute;inset:0;z-index:18;pointer-events:none}
+.sticker{position:absolute;left:50%;top:50%;width:140px;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab}
+.sticker img{width:100%;display:block;pointer-events:none;filter:drop-shadow(0 8px 18px rgba(0,0,0,.14))}
+.sticker.selected{outline:2px dashed rgba(130,105,126,.7);outline-offset:4px}
+.sticker-tools{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);gap:4px;background:#fff;padding:5px;border-radius:999px;border:1px solid #e7dde5}
+.sticker.selected .sticker-tools{display:flex}
+.sticker-tools button{width:26px;height:26px;padding:0;border-radius:50%;font-size:12px}
+
+.header{padding:34px 48px 18px}
+.eyebrow{font-size:12px;font-weight:900;letter-spacing:.18em;color:var(--accent);margin-bottom:12px}
+.header h1{margin:0 0 10px;font-family:Georgia,serif;font-size:44px;line-height:1.05}
+.header p{margin:0;max-width:820px;font-size:15px;line-height:1.85;color:#625962}
+
+.timeline{position:relative;padding:4px 48px 34px}
+.timeline::before{content:"";position:absolute;left:99px;top:0;bottom:0;width:1px;background:var(--timeline)}
+.event{
+  position:relative;
+  display:grid;
+  grid-template-columns:90px 280px 1fr;
+  gap:22px;
+  align-items:start;
+  padding:18px 0 30px;
+}
+.marker{
+  position:relative;
+  min-width:44px;
+  min-height:44px;
+  max-width:98px;
+  width:max-content;
+  padding:0 10px;
+  margin-left:30px;
+  border-radius:999px;
+  background:var(--marker-bg);
+  color:var(--marker-text);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;
+}
+.photo{
+  position:relative;
+  width:100%;
+  aspect-ratio:4/5;
+  background:var(--photo-bg);
+  border:1px solid #ece2ea;
+  border-radius:28px;
+  overflow:hidden;
+  cursor:grab;
+}
+.photo.square{aspect-ratio:1/1}
+.photo.landscape{aspect-ratio:16/10}
+.photo img{
+  position:absolute;
+  left:50%; top:50%;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:none;
+  transform:translate(calc(-50% + var(--tx,0px)),calc(-50% + var(--ty,0px))) scale(var(--zoom,1));
+  transform-origin:center;
+  user-select:none;
+  -webkit-user-drag:none;
+  pointer-events:none;
+}
+.photo-placeholder{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  color:#a58f9f;text-align:center;font-size:13px;line-height:1.6;
+}
+.copy{
+  position:relative;
+  padding-top:2px;
+  align-self:center;
+}
+.event-bg{
+  position:absolute; inset:-10px -12px -10px -12px;
+  z-index:0;
+  border-radius:26px;
+  background:var(--panel-bg);
+  border:1px solid var(--panel-border);
+  opacity:1;
+  pointer-events:none;
+}
+.copy > *:not(.event-bg){position:relative;z-index:2}
+.copy .year + .style-mini-btn.year-btn{position:absolute}
+.year{
+  display:inline-block;
+  padding:7px 12px;
+  border-radius:999px;
+  background:var(--year-bg);
+  color:var(--year-text);
+  font-size:12px;
+  font-weight:900;
+  margin-bottom:12px;
+  border:1px solid transparent;
+}
+.event-title{margin:0;font-size:28px;line-height:1.18}
+.event-sub{margin:8px 0 14px;color:var(--muted);font-size:14px;font-weight:800}
+.event-text{font-size:14px;line-height:1.95;color:#4f4550;white-space:pre-line}
+.keywords{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;position:relative}
+.tag{padding:6px 10px;border-radius:999px;border:1px solid var(--tag-border);background:var(--tag-bg);color:var(--tag-text);font-size:11px}
+.delete{margin-top:12px;border:0;background:transparent;color:#b48c9b;padding:0;font-size:12px}
+.add-area{display:flex;justify-content:center;padding:10px 48px 34px}
+.add-area button{background:#fff;color:#756975;border:1px dashed #d7cad4}
+
+.footer{
+  position:relative;
+  margin:0 48px 36px;
+  padding:24px 26px;
+  border-radius:28px;
+  background:transparent;
+  border:1px solid transparent;
+  --footer-alpha:1;
+  isolation:isolate;
+}
+.footer::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  border-radius:inherit;
+  background:var(--footer-bg);
+  border:1px solid var(--footer-border);
+  opacity:var(--footer-alpha);
+  pointer-events:none;
+}
+.footer h2{margin:0 0 14px;font-size:22px}
+.rel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.rel-card{
+  position:relative;
+  background:var(--footer-card-bg);
+  border:1px solid var(--footer-card-border);
+  border-radius:18px;
+  padding:18px;
+  min-height:126px;
+}
+.rel-label{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--accent);margin-bottom:10px}
+.rel-text{font-size:14px;line-height:1.85;color:#574f57}
+
+.style-mini-btn{
+  position:absolute;
+  z-index:30;
+  width:22px;height:22px;padding:0;
+  border-radius:50%;
+  background:rgba(48,41,49,.92);
+  color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;
+  transition:.15s;
+}
+*:hover > .style-mini-btn{opacity:1}
+.style-mini-btn.panel{right:2px;top:2px}
+.style-mini-btn.year-btn{right:-30px;top:10px}
+.style-mini-btn.marker-btn{right:-26px;top:-2px}
+.style-mini-btn.tag-btn{right:-28px;top:-2px}
+.style-mini-btn.footer-btn{right:10px;top:10px}
+.style-mini-btn.rel-btn{right:8px;top:8px}
+.style-mini-btn.board-btn{right:10px;top:10px}
+
+.context-style-popover{
+  position:fixed;z-index:999998;display:none;width:240px;padding:12px;
+  border-radius:16px;background:rgba(35,30,36,.97);color:#fff;
+  box-shadow:0 14px 36px rgba(0,0,0,.24)
+}
+.context-style-popover.show{display:block}
+.ctx-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ctx-title{font-size:12px;font-weight:900}
+.ctx-close{width:26px;height:26px;padding:0;border-radius:50%;background:#625762}
+.ctx-row{display:grid;grid-template-columns:72px 1fr;gap:8px;align-items:center;margin-top:8px}
+.ctx-row label{font-size:11px;font-weight:800}
+.ctx-row input[type=color]{width:100%;height:34px;border:0}
+.ctx-row input[type=range]{width:100%}
+
+.selection-color-tool{
+  position:fixed;
+  z-index:2147483647;
+  display:none;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  background:#2f2930;
+  color:#fff;
+  border-radius:999px;
+  box-shadow:0 12px 32px rgba(0,0,0,.28)
+}
+.selection-color-tool.show{display:flex!important}
+.selection-color-tool span{font-size:12px;font-weight:900}
+.selection-color-tool input[type=color]{width:30px;height:30px;border:0;padding:0}
+.selection-color-tool button{width:28px;height:28px;padding:0;border-radius:50%;background:#625762}
+
+.capture-return{
+  display:none;
+  position:fixed;right:14px;top:14px;z-index:999999;
+  padding:10px 14px;border-radius:999px;background:#2f2930
+}
+.capture-mode .capture-return{display:block}
+.capture-mode .toolbar,
+.capture-mode .add-area,
+.capture-mode .delete,
+.capture-mode .style-mini-btn,
+.capture-mode .export-guide,
+.capture-mode .context-style-popover,
+.capture-mode .selection-color-tool{display:none!important}
+.png-exporting .toolbar,
+.png-exporting .capture-return,
+.png-exporting .add-area,
+.png-exporting .delete,
+.png-exporting .style-mini-btn,
+.png-exporting .export-guide,
+.png-exporting .context-style-popover,
+.png-exporting .selection-color-tool{visibility:hidden!important}
+
+[contenteditable=true]:focus{outline:2px solid rgba(180,145,175,.6);outline-offset:3px;border-radius:5px}
+
+body.layout-landscape .export-frame{width:1872px}
+body.layout-landscape .board{width:1680px}
+body.layout-landscape .timeline{display:grid;grid-template-columns:1fr 1fr;gap:26px 40px;padding:12px 56px 36px}
+body.layout-landscape .timeline::before{display:none}
+body.layout-landscape .event{grid-template-columns:60px 245px 1fr;gap:18px;padding:18px 0 22px}
+body.layout-landscape .marker{margin-left:6px}
+body.layout-landscape .photo{width:245px}
+body.layout-landscape .copy{align-self:center}
+body.layout-landscape .footer{margin:0 56px 40px}
+body.layout-landscape .header{padding:42px 56px 24px}
+
+@media(max-width:900px){
+  .export-frame{transform-origin:top left}
+  .board{width:1160px}
+}
+</style>
+</head>
+<body>
+<div class="page-bg" id="pageBg"></div>
+
+<div class="selection-color-tool" id="selectionColorTool">
+  <span>선택 글씨 색</span>
+  <input type="color" id="selectionColorInput" value="#29232a">
+  <button type="button" id="selectionColorClose">×</button>
+</div>
+
+<div class="context-style-popover" id="contextStylePopover">
+  <div class="ctx-head"><span class="ctx-title" id="ctxTitle">스타일</span><button type="button" class="ctx-close" id="ctxClose">×</button></div>
+  <div id="ctxControls"></div>
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="group">
+      <span class="group-title">방향</span>
+      <button class="light orientation" id="portraitBtn" onclick="setOrientation('portrait')">세로 타임라인</button>
+      <button class="light orientation" id="landscapeBtn" onclick="setOrientation('landscape')">가로 책자</button>
+    </div>
+    <div class="group">
+      <span class="group-title">배경</span>
+      <label class="file-btn soft">페이지 사진<input type="file" accept="image/*" onchange="loadBg(this,'page')"></label>
+      <label class="file-btn soft">보드 사진<input type="file" accept="image/*" onchange="loadBg(this,'board')"></label>
+      <div class="ctl">페이지색 <input type="color" value="#f1edf1" oninput="setVar('--page-bg',this.value)"></div>
+      <div class="ctl">보드색 <input type="color" value="#fffdfd" oninput="setVar('--board-bg',this.value)"></div>
+      <div class="ctl">포인트 <input type="color" value="#9b8397" oninput="setVar('--accent',this.value)"></div>
+    </div>
+    <div class="group">
+      <span class="group-title">효과</span>
+      <button class="light" onclick="toggleScan()">지지직 선</button>
+      <div class="ctl">강도 <input type="range" min="0" max="100" value="0" oninput="setVar('--scan-opacity',(this.value/100).toFixed(2))"></div>
+      <label class="file-btn">＋ 스티커<input type="file" accept="image/*" multiple onchange="addSticker(this)"></label>
+      <button onclick="addEvent()">＋ 사건</button>
+    </div>
+    <div class="group">
+      <span class="group-title">저장</span>
+      <button class="soft" onclick="toggleCapture()">캡처용</button>
+      <button onclick="savePNG()">PNG 저장</button>
+    </div>
+  </div>
+</div>
+
+<button class="capture-return" onclick="toggleCapture()">← 편집으로 돌아가기</button>
+
+<div class="export-frame" id="exportFrame">
+  <div class="export-guide"></div>
+  <main class="board" id="board">
+    <div class="board-bg" id="boardBg"></div>
+    <div class="board-wash"></div>
+    <div class="scanlines"></div>
+    <div class="stickers" id="stickers"></div>
+    <button class="style-mini-btn board-btn" data-style="board">⚙</button>
+
+    <section class="header">
+      <div class="eyebrow" contenteditable="true">STORY ARCHIVE · TIMELINE</div>
+      <h1 contenteditable="true">영원한 계절</h1>
+      <p contenteditable="true">사진과 핵심 사건을 한눈에 정리할 수 있는 서사 보드.</p>
+    </section>
+
+    <section class="timeline" id="timeline"></section>
+
+    <div class="add-area"><button onclick="addEvent()">＋ 사건 카드 추가</button></div>
+
+    <section class="footer" id="footer">
+      <button class="style-mini-btn footer-btn" data-style="footer">⚙</button>
+      <h2 contenteditable="true">지금, 두 사람</h2>
+      <div class="rel-grid">
+        <div class="rel-card">
+          <button class="style-mini-btn rel-btn" data-style="rel">⚙</button>
+          <div class="rel-label" contenteditable="true">RELATIONSHIP</div>
+          <div class="rel-text" contenteditable="true">서로의 온기 없이는 숨 쉴 수 없는, 필연적인 구원자이자 영원한 연인.</div>
+        </div>
+        <div class="rel-card">
+          <button class="style-mini-btn rel-btn" data-style="rel">⚙</button>
+          <div class="rel-label" contenteditable="true">PROMISE</div>
+          <div class="rel-text" contenteditable="true">반지를 절대 빼지 않기.</div>
+        </div>
+        <div class="rel-card">
+          <button class="style-mini-btn rel-btn" data-style="rel">⚙</button>
+          <div class="rel-label" contenteditable="true">AFTER</div>
+          <div class="rel-text" contenteditable="true">영원한 계절, 그리고 아직 끝나지 않은 밤.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<template id="eventTemplate">
+  <article class="event">
+    <div class="marker" contenteditable="true">SCENE</div>
+    <button class="style-mini-btn marker-btn" data-style="marker">⚙</button>
+
+    <label class="photo">
+      <img class="photo-img" draggable="false">
+      <span class="photo-placeholder">클릭해서<br>대표 사진 넣기</span>
+      <input type="file" accept="image/*">
+    </label>
+
+    <div class="copy">
+      <div class="event-bg"></div>
+      <button class="style-mini-btn panel" data-style="panel">⚙</button>
+
+      <div class="year" contenteditable="true">YEAR</div>
+      <button class="style-mini-btn year-btn" data-style="year">⚙</button>
+
+      <h3 class="event-title" contenteditable="true">사건 제목</h3>
+      <div class="event-sub" contenteditable="true">소제목 · 장면 이름 · 핵심 분위기</div>
+      <div class="event-text" contenteditable="true">이 사건의 내용을 3~5줄 정도로 적어주세요.</div>
+
+      <div class="keywords">
+        <span class="tag" contenteditable="true">#키워드1</span>
+        <span class="tag" contenteditable="true">#키워드2</span>
+        <span class="tag" contenteditable="true">#키워드3</span>
+        <button class="style-mini-btn tag-btn" data-style="tags">⚙</button>
+      </div>
+
+      <button class="delete" onclick="removeEvent(this)">이 사건 삭제</button>
+    </div>
+  </article>
+</template>
+
+<script>
+const presets = [
+  ['SCENE','2019 — 2020','이혁의 계절','첫 만남 · 첫 기싸움 · 대본 밖의 감정','스물한 살의 톱스타와 열아홉의 신인이 영화 촬영장에서 만났다.\n처음에는 장난 같은 기싸움이었지만, 촬영이 이어질수록 대본에 없던 손짓과 시선이 늘어났다.',['#첫만남','#영화촬영','#애드리브','#감정의시작']],
+  ['PAST','2021 — 2023','각자의 지옥','단절 · 은퇴 · 각성 · 보내지 못한 연락','둘은 서로 다른 이유로 세상에서 멀어졌다.\n연락하지 못했지만, 완전히 잊은 적도 없었다.',['#단절','#공황','#각성','#그리움']],
+  ['NOW','2025','폐허에서의 재회','코드 레드 · 신드롬과 스텔라 · 유일한 예외','폭주 직전의 현장에서 두 사람은 다시 만났다.\n그리고 손이 닿는 순간, 유일한 예외라는 것을 알게 된다.',['#재회','#접촉','#예외','#구원']]
+];
+
+function setVar(n,v){document.documentElement.style.setProperty(n,v)}
+function setOrientation(mode){
+  document.body.classList.toggle('layout-landscape',mode==='landscape');
+  portraitBtn.classList.toggle('active',mode==='portrait');
+  landscapeBtn.classList.toggle('active',mode==='landscape');
+}
+function loadBg(input,type){
+  const f=input.files?.[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const u=`url("${e.target.result}")`;
+    if(type==='page'){setVar('--page-image',u); pageBg.style.backgroundImage=u; exportFrame.style.backgroundImage=u}
+    if(type==='board'){setVar('--board-image',u); boardBg.style.backgroundImage=u}
+  };
+  r.readAsDataURL(f); input.value='';
+}
+function toggleScan(){
+  const v=getComputedStyle(document.documentElement).getPropertyValue('--scan-opacity').trim();
+  setVar('--scan-opacity',(!v||v==='0')?'.35':'0');
+}
+function addEvent(data){
+  const frag=document.getElementById('eventTemplate').content.cloneNode(true);
+  const article=frag.querySelector('.event');
+  if(data){
+    article.querySelector('.marker').textContent=data[0];
+    article.querySelector('.year').textContent=data[1];
+    article.querySelector('.event-title').textContent=data[2];
+    article.querySelector('.event-sub').textContent=data[3];
+    article.querySelector('.event-text').textContent=data[4];
+    const tags=article.querySelectorAll('.tag');
+    data[5].forEach((t,i)=>{if(tags[i])tags[i].textContent=t});
+  }
+  bindEvent(article);
+  timeline.appendChild(article);
+}
+function removeEvent(btn){btn.closest('.event').remove()}
+
+function clampPhoto(img){
+  const p=img.closest('.photo'); if(!p)return;
+  const z=Math.max(1,parseFloat(img.dataset.zoom||'1')); img.dataset.zoom=z;
+  const w=p.clientWidth,h=p.clientHeight,nw=img.naturalWidth||w,nh=img.naturalHeight||h;
+  const base=Math.max(w/nw,h/nh),dw=nw*base*z,dh=nh*base*z;
+  const mx=Math.max(0,(dw-w)/2),my=Math.max(0,(dh-h)/2);
+  let x=parseFloat(img.dataset.x||0),y=parseFloat(img.dataset.y||0);
+  x=Math.max(-mx,Math.min(mx,x)); y=Math.max(-my,Math.min(my,y));
+  img.dataset.x=x; img.dataset.y=y;
+}
+function syncPhoto(img){
+  clampPhoto(img);
+  img.style.setProperty('--zoom',img.dataset.zoom||1);
+  img.style.setProperty('--tx',(img.dataset.x||0)+'px');
+  img.style.setProperty('--ty',(img.dataset.y||0)+'px');
+}
+function bindEvent(article){
+  const photo=article.querySelector('.photo');
+  const input=photo.querySelector('input[type=file]');
+  const img=photo.querySelector('img');
+  const ph=photo.querySelector('.photo-placeholder');
+
+  photo.addEventListener('click',e=>{
+    if(img.style.display!=='block' && !e.target.closest('.style-mini-btn')) input.click();
+  });
+  input.addEventListener('change',()=>{
+    const f=input.files?.[0]; if(!f)return;
+    const r=new FileReader();
+    r.onload=e=>{
+      img.src=e.target.result; img.style.display='block'; ph.style.display='none';
+      img.dataset.zoom='1';img.dataset.x='0';img.dataset.y='0';
+      img.onload=()=>syncPhoto(img);
+    };
+    r.readAsDataURL(f); input.value='';
+  });
+
+  let drag=false,sx=0,sy=0,bx=0,by=0;
+  photo.addEventListener('pointerdown',e=>{
+    if(img.style.display!=='block'||e.target.closest('.style-mini-btn'))return;
+    drag=true;sx=e.clientX;sy=e.clientY;bx=parseFloat(img.dataset.x||0);by=parseFloat(img.dataset.y||0);
+    photo.setPointerCapture(e.pointerId);
+  });
+  photo.addEventListener('pointermove',e=>{
+    if(!drag)return;
+    img.dataset.x=bx+(e.clientX-sx); img.dataset.y=by+(e.clientY-sy); syncPhoto(img);
+  });
+  photo.addEventListener('pointerup',()=>drag=false);
+  photo.addEventListener('wheel',e=>{
+    if(img.style.display!=='block')return;
+    e.preventDefault();
+    let z=parseFloat(img.dataset.zoom||1)+(e.deltaY<0?.06:-.06);
+    img.dataset.zoom=Math.max(1,Math.min(3,z)); syncPhoto(img);
+  },{passive:false});
+  photo.addEventListener('dblclick',()=>{
+    if(photo.classList.contains('landscape')){photo.classList.remove('landscape');photo.classList.add('square')}
+    else if(photo.classList.contains('square')){photo.classList.remove('square')}
+    else photo.classList.add('landscape');
+    requestAnimationFrame(()=>syncPhoto(img));
+  });
+}
+
+let activeTarget=null;
+function row(label,type,value,min,max,oninput){
+  const d=document.createElement('div'); d.className='ctx-row';
+  const l=document.createElement('label'); l.textContent=label;
+  const i=document.createElement('input'); i.type=type;i.value=value;
+  if(type==='range'){i.min=min;i.max=max}
+  i.addEventListener('input',()=>oninput(i.value));
+  d.append(l,i); return d;
+}
+function hex(c){
+  const m=(c||'').match(/\d+/g); if(!m)return'#ffffff';
+  return '#'+m.slice(0,3).map(v=>(+v).toString(16).padStart(2,'0')).join('');
+}
+function rgba(h,a){
+  h=h.replace('#',''); const n=parseInt(h,16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function alpha(c){const m=c.match(/rgba?\(([^)]+)\)/);if(!m)return 1;const p=m[1].split(',');return p.length===4?+p[3]:1}
+function openStyle(btn){
+  const style=btn.dataset.style;
+  let target=btn.parentElement;
+  if(style==='panel') target=btn.parentElement.querySelector('.event-bg');
+  activeTarget=target;
+
+  ctxControls.innerHTML='';
+  ctxTitle.textContent='스타일';
+  const cs=getComputedStyle(target);
+
+  if(style==='board'){
+    ctxTitle.textContent='보드';
+    ctxControls.append(
+      row('배경','color',hex(getComputedStyle(boardBg).backgroundColor),0,0,v=>boardBg.style.backgroundColor=v),
+      row('테두리','color',hex(getComputedStyle(board).borderTopColor),0,0,v=>board.style.borderColor=v)
+    );
+  }
+  if(style==='panel'){
+    ctxTitle.textContent='사건 글판';
+    ctxControls.append(
+      row('배경','color',hex(cs.backgroundColor),0,0,v=>target.style.backgroundColor=v),
+      row('테두리','color',hex(cs.borderTopColor),0,0,v=>target.style.borderColor=v),
+      row('투명도','range',Math.round((+cs.opacity||1)*100),0,100,v=>target.style.opacity=v/100)
+    );
+  }
+  if(style==='year'){
+    ctxTitle.textContent='연도칩';
+    ctxControls.append(
+      row('배경','color',hex(cs.backgroundColor),0,0,v=>target.style.backgroundColor=v),
+      row('글씨','color',hex(cs.color),0,0,v=>target.style.color=v)
+    );
+  }
+  if(style==='marker'){
+    ctxTitle.textContent='사건 라벨';
+    ctxControls.append(
+      row('배경','color',hex(cs.backgroundColor),0,0,v=>target.style.backgroundColor=v),
+      row('글씨','color',hex(cs.color),0,0,v=>target.style.color=v)
+    );
+  }
+  if(style==='tags'){
+    ctxTitle.textContent='이 줄 태그';
+    const tags=[...target.querySelectorAll('.tag')];
+    const first=getComputedStyle(tags[0]);
+    const a=alpha(first.backgroundColor);
+    let col=hex(first.backgroundColor);
+    ctxControls.append(
+      row('배경','color',col,0,0,v=>{col=v;tags.forEach(t=>t.style.backgroundColor=rgba(col,a))}),
+      row('투명도','range',Math.round(a*100),0,100,v=>tags.forEach(t=>t.style.backgroundColor=rgba(col,v/100))),
+      row('글씨','color',hex(first.color),0,0,v=>tags.forEach(t=>t.style.color=v)),
+      row('테두리','color',hex(first.borderTopColor),0,0,v=>tags.forEach(t=>t.style.borderColor=v))
+    );
+  }
+  if(style==='footer'){
+    ctxTitle.textContent='하단 큰 박스';
+    const footerBg = getComputedStyle(target,'::before');
+    const currentAlpha = parseFloat(getComputedStyle(target).getPropertyValue('--footer-alpha')) || 1;
+    ctxControls.append(
+      row('배경','color',hex(footerBg.backgroundColor),0,0,v=>target.style.setProperty('--footer-bg',v)),
+      row('테두리','color',hex(footerBg.borderTopColor),0,0,v=>target.style.setProperty('--footer-border',v)),
+      row('투명도','range',Math.round(currentAlpha*100),0,100,v=>target.style.setProperty('--footer-alpha',v/100))
+    );
+  }
+  if(style==='rel'){
+    ctxTitle.textContent='하단 카드';
+    ctxControls.append(
+      row('배경','color',hex(cs.backgroundColor),0,0,v=>target.style.backgroundColor=v),
+      row('테두리','color',hex(cs.borderTopColor),0,0,v=>target.style.borderColor=v)
+    );
+  }
+
+  const r=btn.getBoundingClientRect();
+  contextStylePopover.style.left=Math.min(innerWidth-250,r.right+8)+'px';
+  contextStylePopover.style.top=Math.min(innerHeight-220,r.top)+'px';
+  contextStylePopover.classList.add('show');
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.style-mini-btn');
+  if(b){e.stopPropagation();openStyle(b);return}
+  if(!e.target.closest('#contextStylePopover')) contextStylePopover.classList.remove('show');
+});
+ctxClose.onclick=()=>contextStylePopover.classList.remove('show');
+
+let savedTextRange=null, lockSelection=false;
+function editableHost(n){if(!n)return null;const e=n.nodeType===3?n.parentElement:n;return e?.closest?.('[contenteditable=true]')}
+function updateSelectionTool(){
+  if(lockSelection)return;
+  const s=getSelection(); if(!s||!s.rangeCount||s.isCollapsed){selectionColorTool.classList.remove('show');return}
+  const r=s.getRangeAt(0); if(!editableHost(r.startContainer)||!editableHost(r.endContainer)){selectionColorTool.classList.remove('show');return}
+  savedTextRange=r.cloneRange();
+  const rect=r.getBoundingClientRect();
+  selectionColorTool.classList.add('show');
+  const tw=selectionColorTool.offsetWidth||160,th=selectionColorTool.offsetHeight||46;
+  let x=rect.left+rect.width/2-tw/2,y=rect.top-th-8;if(y<8)y=rect.bottom+8;
+  selectionColorTool.style.left=Math.max(8,Math.min(innerWidth-tw-8,x))+'px';
+  selectionColorTool.style.top=y+'px';
+  selectionColorInput.value=hex(getComputedStyle(editableHost(r.startContainer)).color);
+}
+document.addEventListener('selectionchange',()=>requestAnimationFrame(updateSelectionTool));
+document.addEventListener('pointerup',()=>setTimeout(updateSelectionTool,0));
+selectionColorTool.addEventListener('pointerdown',e=>{e.stopPropagation();lockSelection=true});
+selectionColorTool.addEventListener('pointerup',()=>setTimeout(()=>lockSelection=false,0));
+selectionColorInput.addEventListener('input',e=>{
+  if(!savedTextRange)return;
+  const s=getSelection();s.removeAllRanges();s.addRange(savedTextRange);
+  document.execCommand('styleWithCSS',false,true);
+  document.execCommand('foreColor',false,e.target.value);
+  if(s.rangeCount)savedTextRange=s.getRangeAt(0).cloneRange();
+});
+selectionColorClose.onclick=()=>{selectionColorTool.classList.remove('show');savedTextRange=null;lockSelection=false};
+
+function addSticker(input){
+  [...(input.files||[])].forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const s=document.createElement('div');s.className='sticker';s.dataset.scale='1';s.dataset.rotate='0';
+      s.innerHTML=`<div class="sticker-tools"><button onclick="resizeSticker(this,.1)">＋</button><button onclick="resizeSticker(this,-.1)">－</button><button onclick="rotateSticker(this,10)">↻</button><button onclick="this.closest('.sticker').remove()">×</button></div><img src="${e.target.result}">`;
+      stickers.appendChild(s);bindSticker(s);
+    };r.readAsDataURL(f)
+  });input.value='';
+}
+function applySticker(s){s.style.transform=`translate(-50%,-50%) scale(${s.dataset.scale}) rotate(${s.dataset.rotate}deg)`}
+function resizeSticker(b,d){const s=b.closest('.sticker');s.dataset.scale=Math.max(.2,Math.min(4,+s.dataset.scale+d));applySticker(s)}
+function rotateSticker(b,d){const s=b.closest('.sticker');s.dataset.rotate=+s.dataset.rotate+d;applySticker(s)}
+function bindSticker(s){
+  let drag=false,br,ox,oy;
+  s.addEventListener('pointerdown',e=>{
+    if(e.target.tagName==='BUTTON')return;
+    document.querySelectorAll('.sticker').forEach(x=>x.classList.remove('selected'));s.classList.add('selected');
+    drag=true;br=board.getBoundingClientRect();
+    const lx=parseFloat(s.style.left||'50')/100*br.width,ty=parseFloat(s.style.top||'50')/100*br.height;
+    ox=e.clientX-(br.left+lx);oy=e.clientY-(br.top+ty);s.setPointerCapture(e.pointerId)
+  });
+  s.addEventListener('pointermove',e=>{
+    if(!drag)return;
+    s.style.left=Math.max(0,Math.min(100,(e.clientX-br.left-ox)/br.width*100))+'%';
+    s.style.top=Math.max(0,Math.min(100,(e.clientY-br.top-oy)/br.height*100))+'%'
+  });
+  s.addEventListener('pointerup',()=>drag=false);
+}
+
+function toggleCapture(){document.body.classList.toggle('capture-mode')}
+async function savePNG(){
+  document.body.classList.add('png-exporting');
+  document.querySelectorAll('.sticker').forEach(s=>s.classList.remove('selected'));
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  try{
+    const rect=exportFrame.getBoundingClientRect();
+    const canvas=await html2canvas(exportFrame,{
+      scale:2,useCORS:true,allowTaint:true,backgroundColor:null,logging:false,
+      scrollX:0,scrollY:-scrollY,width:Math.round(rect.width),height:Math.round(exportFrame.scrollHeight),
+      windowWidth:document.documentElement.clientWidth,windowHeight:Math.max(document.documentElement.clientHeight,exportFrame.scrollHeight)
+    });
+    const a=document.createElement('a');
+    a.download=(document.querySelector('.header h1').innerText||'story-board')+'.png';
+    a.href=canvas.toDataURL('image/png');a.click();
+  }finally{document.body.classList.remove('png-exporting')}
+}
+
+window.addEventListener('resize',()=>document.querySelectorAll('.photo-img').forEach(i=>{if(i.style.display==='block')syncPhoto(i)}));
+window.addEventListener('DOMContentLoaded',()=>{
+  setOrientation('portrait');
+  presets.forEach(addEvent);
+});
+</script>
+</body>
+</html>
